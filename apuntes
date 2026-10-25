@@ -1,0 +1,15 @@
+Un "Network Namespace" (netns) es una funcionalidad del kernel de linux que permite crear subinstancias del sistema sin necesidad de tener otro ordenador o kernel ejecutándose. Comparte el mismo kernel, los mismos procesos y comandos que la máquina anfitriona, pero todo lo referente a la red es completamente separado e independiente. Al crear un namespace, puedes tener una instancia que esté ejecutando x proceso a través del puerto 80, mientras que la máquina anfitriona puede tener el proceso y ejecutándose también por el puerto 80 y no chocarían, ya que en términos de redes, son completamente diferentes. EL concepto de "contenedor" viene después de esto, pero está muy relacionado a porqué puedes tener 2 contenedores diferentes ocupando el mismo puerto y no habría ningún problema, así como el entrelazamiento de puertos entre contenedor y anfitrión (8080:80 por ejemplo)
+
+Existen varios tipos de namespaces, ya sea de red, de PID, de sistemas de ficheros, etc. Los contenedores son un conjunto de varios namespaces para formar un ordenador con funcionalidades mínimas y aislado del ordenador anfitrión, que es lo que hace que destaquen y se usen tanto.
+
+cgroups (Control Groups) es una tecnología que permite limitar cuántos recursos consume un proceso. En el contexto de los contenedores, hemos dicho que cada contenedor es un conjunto de namespaces, que a su vez trabajan junto con otros procesos (por ejemplo, nginx) que ejecuta el propio contenedor. Todos estos procesos están ligados (o cuelgan) del PID 1 del contenedor, que es la raíz del mismo. Por tanto, un contenedor (o un sistema en general) lo que es al final del día es un conjunto de subprocesos que cuelgan del PID 1. En el caso de los contenedores, detrás del PID 1 en el contenedor hay un proceso ejecutándose en la máquina anfitriona, con su propio PID (pongamos, 4512). cgroups actúa sobre el PID 4512 diciéndole "todo lo que cuelgue de este proceso va a tener x limitaciones de hardware". De esa forma, eso se aplica a todo el arbol de procesos que cuelgan de 4512 (PID 4512 anfitrión -> PID 1 contenedor -> PID 8080 nginx dentro del contenedor, etc. )
+
+Un cgroup es una funcionalidad del kernel de linux que no se limita solo a contenedores (he explicado todo lo anterior porque estaba relacionado con los namespaces) pero se aplica a cualquier tipo de proceso que corra en un sistema linux.
+
+el siguiente paso lógico al crear namespaces de red sería entrelazarlos con lo que se conoce como "veth pair", que no es más que un cable virtual con dos extremos (veth-A y veth-B por poner).
+
+# Namespaces
+# ip netns add patata
+# ip netns list
+# ip netns exec patata ip a
+# ip link add veth-host type veth peer name veth-ns
