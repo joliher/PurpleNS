@@ -1,1 +1,1 @@
-docker build --network host -t ovs-sw .
+docker build --network host -t lab-ovs-sw .

@@ -6,9 +6,9 @@ pid() { docker inspect -f '{{.State.Pid}}' "$1"; }
 sudo modprobe openvswitch
 docker rm -f sw h1 h2 rt kali suri 2>/dev/null
 
-docker run -d --name sw   --network none --cap-add NET_ADMIN ovs-sw
-docker run -d --name h1   --network none --cap-add NET_ADMIN lab-victim
-docker run -d --name h2   --network none --cap-add NET_ADMIN lab-victim
+docker run -d --name sw   --network none --cap-add NET_ADMIN lab-ovs-sw
+docker run -d --name h1 --hostname h1 --network none --cap-add NET_ADMIN -v h1-ossec:/var/ossec/etc lab-victim
+docker run -d --name h2 --hostname h2 --network none --cap-add NET_ADMIN -v h2-ossec:/var/ossec/etc lab-victim
 docker run -d --name rt   --network none --cap-add NET_ADMIN --sysctl net.ipv4.ip_forward=1 lab-router sleep infinity
 docker run -d --name kali --network none --cap-add NET_ADMIN lab-kali sleep infinity
 
@@ -47,9 +47,9 @@ docker exec kali ip route add default via $ATK_NET.254
 # Pruebas
 docker exec kali ping -c 2 $LAN_NET.1
 
-#
-#docker volume create suri-rules
-#docker run --rm --network host -v suri-rules:/var/lib/suricata --entrypoint suricata-update jasonish/suricata:latest
+# SOLO UNA VEZ
+docker volume create suri-rules
+docker run --rm --network host -v suri-rules:/var/lib/suricata --entrypoint suricata-update jasonish/suricata:latest
 
 docker volume create suri-logs
 docker run -d --name suri --network none --cap-add NET_ADMIN --cap-add NET_RAW --cap-add SYS_NICE -v suri-logs:/var/log/suricata -v suri-rules:/var/lib/suricata jasonish/suricata:latest -i eth0 --set 'vars.address-groups.HOME_NET=[10.80.0.0/24]'
@@ -60,5 +60,19 @@ docker exec sw ip link set p-suri up
 docker exec suri ip link set eth0 up
 docker exec sw ovs-vsctl -- --id=@p get port p-suri -- --id=@m create mirror name=m0 select-all=true output-port=@p -- set bridge br-lan mirrors=@m
 
-
+# Wazuh
+PROJ="$(cd "$(dirname "$0")" && pwd)"
+WZ_FILE="$PROJ/wazuh/wazuh-docker/single-node/docker-compose.lab.yml"
+if [ -f "$WZ_FILE" ]; then
+  WZ_COMPOSE="docker compose -f $WZ_FILE"
+  $WZ_COMPOSE up -d
+  WZ=$(docker inspect -f '{{.State.Pid}}' $($WZ_COMPOSE ps -q wazuh.manager))
+  sudo ip link add p-wz netns $(pid sw) type veth peer name eth-lan netns $WZ
+  docker exec sw ovs-vsctl add-port br-lan p-wz
+  docker exec sw ip link set p-wz up
+  sudo nsenter -t $WZ -n ip link set eth-lan up
+  sudo nsenter -t $WZ -n ip addr add $LAN_NET.10/24 dev eth-lan
+else
+  echo "Wazuh no está preparado: ejecuta primero wazuh/script.sh"
+fi
 
